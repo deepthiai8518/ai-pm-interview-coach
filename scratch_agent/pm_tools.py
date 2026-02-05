@@ -132,133 +132,76 @@ def evaluate_pm_answer(params: dict):
     question_data = conversation_store[question_id]["question"]
     
     # Comprehensive evaluation prompt
-    eval_prompt = f"""
-You are a STRICT evaluator for AI Product Manager interview answers.
-You are calibrated to real interview standards where incomplete, vague, or unstructured answers do not pass.
-
-Your job is NOT to encourage the candidate.
-Your job is to judge whether this answer would pass a real AI PM interview round.
-
----
+    eval_prompt = f"""You are a STRICT evaluator for AI Product Manager interview answers. You are calibrated to real interview standards where incomplete or vague answers do not pass.
 
 **Question Asked:**
-
 {question_data['question']}
 
 **Candidate's Answer:**
-
 {user_answer}
 
----
-
 **Evaluation Criteria:**
-
 {chr(10).join(f"- {c}" for c in question_data['evaluation_criteria'])}
 
 ---
 
-## STRICT EVALUATION PROCESS (FOLLOW IN ORDER)
+**STRICT SCORING RULES (APPLY THESE FIRST):**
 
-### STEP 1: AUTOMATIC CAPS (APPLY FIRST — OVERRIDES EVERYTHING)
+Before evaluating content quality, check these automatic caps:
 
-Apply these caps BEFORE judging quality.
+1. **INCOMPLETE ANSWERS = Score 1-2**
+   - Answer cuts off mid-sentence or mid-thought
+   - Answer is under 50 words
+   - Answer only restates the question or says what they "would" do without doing it
 
-### 1️⃣ INCOMPLETE ANSWERS → **Cap at 2**
+2. **PARTIAL ANSWERS = Cap at 2**
+   - Multi-part question but only addresses one part
+   - Ignores key aspects (e.g., asked about tradeoffs but doesn't mention any)
 
-An answer is INCOMPLETE if:
-- It cuts off mid-sentence or mid-thought
-- It is under ~50 words AND does not clearly address all parts of the question
-- It restates the question without answering it
-- It says what the candidate *would* do without actually doing it
+3. **VAGUE ANSWERS = Cap at 3**
+   - No specific metrics, examples, or concrete approaches
+   - Generic statements that could apply to any problem
+   - Uses buzzwords without demonstrating understanding
 
-### 2️⃣ PARTIAL ANSWERS → **Cap at 2**
+**SCORING RUBRIC:**
 
-An answer is PARTIAL if:
-- The question is multi-part and only one part is addressed
-- Key aspects are ignored (e.g., asked about trade-offs but none are mentioned)
-- Metrics, users, or decisions are mentioned but not connected
+- **1 = Poor:** Incomplete, fragment, off-topic, or demonstrates misunderstanding
+- **2 = Below Average:** Partially addresses question but missing major components, superficial, or cuts off
+- **3 = Average:** Complete answer covering basics, but lacks depth, specifics, or misses some criteria
+- **4 = Good:** Solid, complete answer with specific examples/metrics, addresses all parts, shows clear reasoning
+- **5 = Excellent:** Comprehensive, structured, demonstrates senior PM thinking with tradeoffs, priorities, and actionable insights
 
-### 3️⃣ VAGUE ANSWERS → **Cap at 3**
+**CALIBRATION EXAMPLES:**
 
-An answer is VAGUE if:
-- It uses generic statements that apply to any AI problem
-- It lacks concrete metrics, examples, decision rules, or trade-offs
-- It relies on buzzwords without showing understanding
+- "I would look at the metrics and make a decision" = Score 1 (vague, no substance)
+- "I'd analyze engagement and satisfaction separately to find the root cause—" = Score 2 (cuts off, incomplete)
+- "I'd segment users by behavior type to see if certain groups drive the satisfaction drop, then decide based on which segment matters more for our business goals" = Score 3 (decent but lacks specific metrics or framework)
+- "I'd first decompose engagement by action type (clicks vs. time spent vs. purchases) and satisfaction by user segment. If power users show satisfaction drops, that's a red flag. I'd run qualitative interviews, check if recommendations feel pushy, and set a threshold: if satisfaction doesn't recover within 2 sprints of iteration, pivot to a different approach" = Score 4 (specific, complete, actionable)
 
-⚠️ NOTE ON WORD COUNT:
-Answers under ~50 words are PRESUMED incomplete,
-UNLESS they clearly address all required dimensions with specificity.
-Word count alone does not determine quality.
+**YOUR TASK:**
+1. First, check if any automatic caps apply
+2. Then evaluate content quality within that cap
+3. Be tough but fair—this is interview calibration, not encouragement
 
----
-
-## STEP 2: CONTENT QUALITY SCORING (WITHIN THE CAP)
-
-Score based on reasoning quality, structure, and interview readiness.
-
-### SCORING RUBRIC
-
-- **1 = Poor**
-  Fragmented, off-topic, incorrect, or shows misunderstanding
-
-- **2 = Below Average**
-  Partially correct but missing major components or depth
-
-- **3 = Average**
-  Complete and coherent, but lacks strong structure, specificity, or trade-offs
-
-- **4 = Good**
-  Well-structured, addresses all parts, includes concrete metrics/examples,
-  shows clear reasoning and trade-off awareness
-
-- **5 = Excellent**
-  Senior PM-level answer:
-  - Structured and prioritized
-  - Explicit trade-offs and decision logic
-  - Clear linkage between model metrics, user impact, and business outcomes
-  - Actionable and interview-ready
-
----
-
-## CALIBRATION EXAMPLES
-
-- "I would look at the metrics and make a decision."
-  → **Score 1** (vague, no substance)
-
-- "I'd analyze engagement and satisfaction separately to find the root cause—"
-  → **Score 2** (cuts off, incomplete)
-
-- "I'd segment users by behavior type to see which groups drive satisfaction changes, then decide based on business importance."
-  → **Score 3** (reasonable but lacks concrete metrics or thresholds)
-
-- "I'd break engagement into clicks, add-to-cart, and purchases, and pair that with satisfaction by user segment. If high-value users show dissatisfaction, I'd pause rollout and iterate. I'd set a guardrail: no more than a 2% drop in satisfaction over two sprints."
-  → **Score 4** (specific, complete, actionable)
-
----
-
-## OUTPUT FORMAT (STRICT)
-
-Return ONLY valid JSON. No explanations. No markdown. No extra text.
-
-{
-  "score": <1-5>,
-  "rating_label": "<Poor|Below Average|Average|Good|Excellent>",
-  "strong_points": ["Specific strength 1", "Specific strength 2"],
-  "missing_points": ["What they should have included 1", "What they missed 2"],
-  "weak_areas": ["Where reasoning was weak 1", "Area to improve 2"],
-  "framework": {
-    "name": "FRAMEWORK NAME",
-    "acronym": "What each letter stands for",
-    "steps": [
-      "Step 1: ...",
-      "Step 2: ...",
-      "Step 3: ..."
-    ],
-    "application": "How to use this in interviews"
-  },
-  "senior_pm_answer": "A senior PM would..."
-}
-"""
+Return ONLY valid JSON:
+{{
+    "score": <1-5>,
+    "rating_label": "<Poor|Below Average|Average|Good|Excellent>",
+    "strong_points": ["Specific strength 1", "Specific strength 2"],
+    "missing_points": ["What they should have included 1", "What they missed 2"],
+    "weak_areas": ["Where reasoning was weak 1", "Area to improve 2"],
+    "framework": {{
+        "name": "FRAMEWORK NAME",
+        "acronym": "What each letter stands for",
+        "steps": [
+            "Step 1: ...",
+            "Step 2: ...",
+            "Step 3: ..."
+        ],
+        "application": "How to use this in interviews"
+    }},
+    "senior_pm_answer": "A senior PM would..."
+}}"""
 
     try:
         response = client.chat.completions.create(
