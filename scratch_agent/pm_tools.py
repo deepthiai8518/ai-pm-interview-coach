@@ -257,7 +257,7 @@ Return ONLY valid JSON. No explanations. No markdown. No extra text.
     "application": "How to use this in interviews"
   },
   "senior_pm_answer": "A senior PM would..."
-}
+}}
 """
 
     try:
