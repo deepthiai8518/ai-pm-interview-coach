@@ -127,6 +127,16 @@ if "last_score" not in st.session_state:
 if "last_framework" not in st.session_state:
     st.session_state.last_framework = None
 
+# FIX: Store question info for retry
+if "last_question_id" not in st.session_state:
+    st.session_state.last_question_id = None
+
+if "last_question_number" not in st.session_state:
+    st.session_state.last_question_number = None
+
+if "last_question_text" not in st.session_state:
+    st.session_state.last_question_text = None
+
 # NEW: Track which answered question is being reviewed
 if "reviewing_answer_idx" not in st.session_state:
     st.session_state.reviewing_answer_idx = None
@@ -797,6 +807,11 @@ else:
                             st.session_state.last_score = score
                             st.session_state.last_framework = fw_text
                             
+                            # FIX: Store question info for retry functionality
+                            st.session_state.last_question_id = st.session_state.current_question_id
+                            st.session_state.last_question_number = st.session_state.current_question_number
+                            st.session_state.last_question_text = question_text
+                            
                             # Only add to answers list if NOT a retry
                             if not is_retry:
                                 # Store FULL evaluation data for review WITH CORRECT QUESTION NUMBER
@@ -869,6 +884,15 @@ else:
 
 *Remember: This is a practice attempt. Your official score won't change, but you'll learn how to structure better answers!*"""
                         })
+                        
+                        # FIX: Restore question state from stored values
+                        st.session_state.current_question_id = st.session_state.get('last_question_id')
+                        st.session_state.current_question_number = st.session_state.get('last_question_number')
+                        st.session_state.topic_current_question[topic_key] = {
+                            'id': st.session_state.get('last_question_id'),
+                            'number': st.session_state.get('last_question_number'),
+                            'text': st.session_state.get('last_question_text', '')
+                        }
                         
                         st.session_state.retry_mode = True
                         st.session_state.awaiting_answer = True
