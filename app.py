@@ -135,6 +135,10 @@ if "reviewing_answer_idx" not in st.session_state:
 if "current_question_number" not in st.session_state:
     st.session_state.current_question_number = None
 
+# FIX: Track current unanswered question per topic (prevents regeneration on click)
+if "topic_current_question" not in st.session_state:
+    st.session_state.topic_current_question = {topic: None for topic in TOPICS.keys()}
+
 # SIDEBAR MENU
 st.sidebar.header("📚 Topics")
 
@@ -152,10 +156,20 @@ for topic_key, topic_label in TOPICS.items():
         st.session_state.current_topic = topic_key
         st.session_state.awaiting_answer = False
         st.session_state.show_retry_buttons = False
-        st.session_state.current_question_id = None
+        
+        # FIX: Only clear question state if switching topics AND no current question exists
+        if st.session_state.topic_current_question[topic_key] is None:
+            st.session_state.current_question_id = None
+            st.session_state.current_question_number = None
+        else:
+            # Restore the existing question state for this topic
+            current_q = st.session_state.topic_current_question[topic_key]
+            st.session_state.current_question_id = current_q['id']
+            st.session_state.current_question_number = current_q['number']
+            st.session_state.awaiting_answer = True
+        
         st.session_state.retry_mode = False
         st.session_state.reviewing_answer_idx = None
-        st.session_state.current_question_number = None
         st.rerun()
     
     # Show progress bar and attempted count
@@ -544,6 +558,13 @@ else:
                             st.session_state.awaiting_answer = True
                             st.session_state.reviewing_skipped = False
                             
+                            # FIX: Store this question in topic_current_question
+                            st.session_state.topic_current_question[topic_key] = {
+                                'id': skipped_q["question_id"],
+                                'number': skipped_q["attempt_number"],
+                                'text': skipped_q["question_text"]
+                            }
+                            
                             # Clear all messages and add only this question
                             st.session_state.messages_by_topic[topic_key] = [
                                 {
@@ -642,6 +663,9 @@ else:
                             "question_text": skipped_q_text,
                             "attempt_number": skipped_question_num
                         })
+                        
+                        # FIX: Clear the current question from topic_current_question
+                        st.session_state.topic_current_question[topic_key] = None
                         
                         # Reset UI state
                         st.session_state.show_retry_buttons = False
@@ -806,6 +830,9 @@ else:
                                 })
                                 st.session_state.retry_mode = False
                             
+                            # FIX: Clear the current question from topic_current_question after answer
+                            st.session_state.topic_current_question[topic_key] = None
+                            
                             st.session_state.current_question_id = None
                             st.session_state.current_question_number = None
                             st.session_state.awaiting_answer = False
@@ -884,6 +911,13 @@ else:
                             st.session_state.current_question_number = next_question_num
                             st.session_state.awaiting_answer = True
                             
+                            # FIX: Store this question in topic_current_question
+                            st.session_state.topic_current_question[topic_key] = {
+                                'id': question_id,
+                                'number': next_question_num,
+                                'text': question_text
+                            }
+                            
                             # Add to THIS TOPIC's messages
                             st.session_state.messages_by_topic[topic_key].append({
                                 "role": "assistant",
@@ -893,26 +927,49 @@ else:
                     st.rerun()
         
         else:
-            # Not awaiting answer - auto-load next question
+            # Not awaiting answer - FIX: Check if there's a stored question before generating new one
             if answered < QUESTIONS_PER_TOPIC and st.session_state.current_question_id is None:
-                # Auto-load the next question
-                with st.spinner("Loading question..."):
-                    result = get_pm_question({"level": "intermediate", "topic": topic_key})
-                    question_text = result.get("question", "Error")
-                    question_id = result.get("id")
-                    
-                    # Increment attempt counter FIRST to get current question number
-                    st.session_state.topic_attempted[topic_key] += 1
-                    current_question_num = st.session_state.topic_attempted[topic_key]
-                    
-                    st.session_state.current_question_id = question_id
-                    st.session_state.current_question_number = current_question_num
+                # Check if there's already a question stored for this topic
+                stored_question = st.session_state.topic_current_question[topic_key]
+                
+                if stored_question is not None:
+                    # Restore the stored question
+                    st.session_state.current_question_id = stored_question['id']
+                    st.session_state.current_question_number = stored_question['number']
                     st.session_state.awaiting_answer = True
                     
-                    # Add to THIS TOPIC's messages
-                    st.session_state.messages_by_topic[topic_key].append({
-                        "role": "assistant",
-                        "content": f"**Question {current_question_num}/15:**\n\n{question_text}\n\n*Take your time and provide a thoughtful answer.*"
-                    })
+                    # Add to messages if not already there
+                    if not messages or "Question" not in messages[-1].get("content", ""):
+                        st.session_state.messages_by_topic[topic_key].append({
+                            "role": "assistant",
+                            "content": f"**Question {stored_question['number']}/15:**\n\n{stored_question['text']}\n\n*Take your time and provide a thoughtful answer.*"
+                        })
                     st.rerun()
-
+                else:
+                    # Auto-load a new question
+                    with st.spinner("Loading question..."):
+                        result = get_pm_question({"level": "intermediate", "topic": topic_key})
+                        question_text = result.get("question", "Error")
+                        question_id = result.get("id")
+                        
+                        # Increment attempt counter FIRST to get current question number
+                        st.session_state.topic_attempted[topic_key] += 1
+                        current_question_num = st.session_state.topic_attempted[topic_key]
+                        
+                        st.session_state.current_question_id = question_id
+                        st.session_state.current_question_number = current_question_num
+                        st.session_state.awaiting_answer = True
+                        
+                        # FIX: Store this question in topic_current_question
+                        st.session_state.topic_current_question[topic_key] = {
+                            'id': question_id,
+                            'number': current_question_num,
+                            'text': question_text
+                        }
+                        
+                        # Add to THIS TOPIC's messages
+                        st.session_state.messages_by_topic[topic_key].append({
+                            "role": "assistant",
+                            "content": f"**Question {current_question_num}/15:**\n\n{question_text}\n\n*Take your time and provide a thoughtful answer.*"
+                        })
+                        st.rerun()
