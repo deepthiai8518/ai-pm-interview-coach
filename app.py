@@ -544,11 +544,21 @@ else:
                             # Use stored question text instead of parsing
                             skipped_q_text = st.session_state.current_question_text or ""
                             
-                            st.session_state.topic_skipped_questions[topic_key].append({
-                                "question_id": st.session_state.current_question_id,
-                                "question_text": skipped_q_text,
-                                "attempt_number": skipped_question_num
-                            })
+                            # Check if this question is already in the skipped list (re-skipping)
+                            already_skipped = False
+                            for sq in st.session_state.topic_skipped_questions[topic_key]:
+                                if sq["question_id"] == st.session_state.current_question_id:
+                                    already_skipped = True
+                                    break
+                            
+                            # Only add to skipped list and increment counter if NOT already skipped
+                            if not already_skipped:
+                                st.session_state.topic_skipped_questions[topic_key].append({
+                                    "question_id": st.session_state.current_question_id,
+                                    "question_text": skipped_q_text,
+                                    "attempt_number": skipped_question_num
+                                })
+                                st.session_state.topic_skipped[topic_key] += 1
                             
                             st.session_state.show_retry_buttons = False
                             st.session_state.current_question_id = None
@@ -556,7 +566,6 @@ else:
                             st.session_state.current_question_text = None
                             st.session_state.awaiting_answer = False
                             st.session_state.retry_mode = False
-                            st.session_state.topic_skipped[topic_key] += 1
                             
                             if messages and messages[-1]["role"] == "assistant":
                                 st.session_state.messages_by_topic[topic_key].pop()
