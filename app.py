@@ -11,15 +11,7 @@ with col1:
     st.caption("Master AI Product Management with 180 interview questions across 12 topics")
 
 with col2:
-    st.write("")
-    with st.expander("ℹ️ How it works", expanded=False):
-        st.markdown("""
-        1. **Enter your OpenAI API key** (one-time setup)
-        2. **Choose a topic** from the sidebar
-        3. **Answer questions** or skip them
-        4. **Get AI feedback** with frameworks and insights
-        5. **Track progress** across all 12 topics
-        """)
+    st.write("")  # Spacing
 
 # API Key Input
 st.markdown("---")
