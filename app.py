@@ -158,7 +158,7 @@ if st.sidebar.button("🏠 Home", use_container_width=True):
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.caption("Developed by **Deepthi**")
+st.sidebar.markdown("💻 **Developed by Deepthi**")
 
 # MAIN CONTENT
 if st.session_state.current_topic is None:
