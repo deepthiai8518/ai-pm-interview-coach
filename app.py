@@ -230,17 +230,14 @@ else:
     messages = st.session_state.messages_by_topic[topic_key]
     
     # Header
-    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    col1, col2, col3 = st.columns([2, 1, 1])
     with col1:
         st.header(topic_label)
     with col2:
-        st.metric("✅ Answered", f"{answered}")
+        st.metric("✅ Answered", f"{answered}/15")
     with col3:
         skipped = st.session_state.topic_skipped[topic_key]
         st.metric("⏭️ Skipped", f"{skipped}")
-    with col4:
-        attempted = st.session_state.topic_attempted[topic_key]
-        st.metric("📊 Attempted", f"{attempted}/15")
     
     st.progress(answered / QUESTIONS_PER_TOPIC, text=f"Answered: {answered}/15 | Skipped: {skipped}/15")
     
