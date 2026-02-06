@@ -126,9 +126,12 @@ if "reviewing_answer_idx" not in st.session_state:
 if "current_question_number" not in st.session_state:
     st.session_state.current_question_number = None
 
-# NEW: Store the retry question ID separately so we can evaluate it
 if "retry_question_id" not in st.session_state:
     st.session_state.retry_question_id = None
+
+# NEW: Store the actual question text separately (not parsed from messages)
+if "current_question_text" not in st.session_state:
+    st.session_state.current_question_text = None
 
 # SIDEBAR MENU
 st.sidebar.header("📚 Topics")
@@ -150,6 +153,7 @@ for topic_key, topic_label in TOPICS.items():
         st.session_state.retry_question_id = None
         st.session_state.reviewing_answer_idx = None
         st.session_state.current_question_number = None
+        st.session_state.current_question_text = None
         st.rerun()
     
     st.sidebar.progress(answered / QUESTIONS_PER_TOPIC, text=f"{answered}/{QUESTIONS_PER_TOPIC}")
@@ -293,23 +297,48 @@ else:
                     st.session_state.reviewing_answer_idx = None
                     st.rerun()
                 
+                # ALWAYS show question
                 st.markdown("### 📝 Question")
-                st.info(ans.get("question_text", "Question not stored"))
+                question_text = ans.get("question_text", "")
+                if question_text:
+                    st.info(question_text)
+                else:
+                    st.warning("Question text not available")
                 
+                # ALWAYS show user's answer
                 st.markdown("### 💬 Your Answer")
-                st.warning(ans.get("answer", "Answer not stored"))
+                user_answer = ans.get("answer", "")
+                if user_answer:
+                    st.warning(user_answer)
+                else:
+                    st.warning("Answer not available")
                 
+                # Evaluation header
                 st.markdown(f"### {emoji} Evaluation: {score}/5 ({ans.get('rating', '')})")
                 
-                for section, title in [("strong_points", "✅ Strong Points"), 
-                                       ("missing_points", "❌ Missing Points"),
-                                       ("weak_areas", "⚠️ Areas to Develop")]:
-                    points = ans.get(section, [])
-                    if points:
-                        st.markdown(f"**{title}:**")
-                        for point in points:
-                            st.write(f"• {point}")
+                # Strong points - only show if there are actual strengths
+                strong_points = ans.get("strong_points", [])
+                if strong_points and len(strong_points) > 0:
+                    st.markdown("**✅ Strong Points:**")
+                    for point in strong_points:
+                        st.write(f"• {point}")
+                # If no strong points for poor scores, that's expected - don't show section
                 
+                # Missing points - always show
+                missing_points = ans.get("missing_points", [])
+                if missing_points:
+                    st.markdown("**❌ Missing Points:**")
+                    for point in missing_points:
+                        st.write(f"• {point}")
+                
+                # Weak areas - always show
+                weak_areas = ans.get("weak_areas", [])
+                if weak_areas:
+                    st.markdown("**⚠️ Areas to Develop:**")
+                    for area in weak_areas:
+                        st.write(f"• {area}")
+                
+                # Framework
                 framework = ans.get("framework", {})
                 if framework and isinstance(framework, dict):
                     st.markdown("**🎯 Framework:**")
@@ -320,6 +349,7 @@ else:
                     for i, step in enumerate(fw_steps, 1):
                         st.write(f"{i}. {step}")
                 
+                # Senior PM answer
                 senior_answer = ans.get("senior_pm_answer", "")
                 if senior_answer:
                     st.markdown("**💡 Senior PM Perspective:**")
@@ -350,6 +380,7 @@ else:
                     if st.button(f"✅ Attempt", key=f"attempt_skipped_{i}", use_container_width=True):
                         st.session_state.current_question_id = skipped_q["question_id"]
                         st.session_state.current_question_number = skipped_q["attempt_number"]
+                        st.session_state.current_question_text = skipped_q["question_text"]  # Store question text
                         st.session_state.awaiting_answer = True
                         st.session_state.reviewing_skipped = False
                         st.session_state.messages_by_topic[topic_key] = [{
@@ -408,27 +439,26 @@ else:
                     key="answer_text_area",
                     height=150,
                     label_visibility="collapsed",
-                    placeholder="Type your answer here... (Aim for 100+ words)"
+                    placeholder="Type your answer here..."
                 )
                 
                 # Different buttons for retry mode vs normal mode
                 if st.session_state.retry_mode:
-                    # RETRY MODE: Only show Submit Practice and Skip to Next
+                    # RETRY MODE
                     col_skip, col_submit = st.columns([1, 2])
                     
                     with col_skip:
                         if st.button("⏭️ Skip to Next Question", use_container_width=True, key="skip_retry_btn"):
-                            # DON'T count as skipped - just move to next question
                             st.session_state.retry_mode = False
                             st.session_state.retry_question_id = None
                             st.session_state.show_retry_buttons = False
                             st.session_state.current_question_id = None
                             st.session_state.current_question_number = None
+                            st.session_state.current_question_text = None
                             st.session_state.awaiting_answer = False
                             st.session_state.last_score = None
                             st.session_state.last_framework = None
                             
-                            # Load next question
                             current_attempted = st.session_state.topic_attempted[topic_key]
                             if current_attempted < QUESTIONS_PER_TOPIC:
                                 with st.spinner("Loading next question..."):
@@ -441,6 +471,7 @@ else:
                                     
                                     st.session_state.current_question_id = question_id
                                     st.session_state.current_question_number = next_question_num
+                                    st.session_state.current_question_text = question_text  # Store question
                                     st.session_state.awaiting_answer = True
                                     
                                     st.session_state.messages_by_topic[topic_key] = [{
@@ -452,7 +483,6 @@ else:
                     with col_submit:
                         submit_disabled = not user_input or len(user_input.strip()) == 0
                         if st.button("📤 Submit Practice Answer", use_container_width=True, key="submit_practice_btn", disabled=submit_disabled, type="primary"):
-                            # Evaluate but DON'T store as new answer
                             st.session_state.messages_by_topic[topic_key].append({"role": "user", "content": user_input})
                             
                             with st.spinner("Evaluating your practice answer..."):
@@ -468,65 +498,55 @@ else:
                                 weak_areas = eval_result.get("weak_areas", [])
                                 senior_perspective = eval_result.get("senior_pm_answer", "")
                                 
-                                strong_text = "\n".join([f"• {p}" for p in strong_points]) if strong_points else "• Good effort"
-                                missing_text = "\n".join([f"• {p}" for p in missing_points]) if missing_points else "• Consider more perspectives"
-                                weak_text = "\n".join([f"• {a}" for a in weak_areas]) if weak_areas else "• Keep practicing"
+                                # Build evaluation text - NO fake fallbacks
+                                eval_sections = [f"## 📊 Practice Evaluation {get_score_color(score)[0]}"]
+                                eval_sections.append(f"\n### Practice Score: **{score}/5** {f'({rating})' if rating else ''}")
+                                eval_sections.append("\n*This is practice - your official score is already recorded.*")
                                 
-                                if not senior_perspective:
-                                    senior_perspective = "A senior PM would consider business impact, technical feasibility, and user needs."
+                                if strong_points:
+                                    eval_sections.append("\n\n### ✅ Strong Points")
+                                    for p in strong_points:
+                                        eval_sections.append(f"\n• {p}")
                                 
-                                emoji, _ = get_score_color(score)
+                                if missing_points:
+                                    eval_sections.append("\n\n### ❌ Still Missing")
+                                    for p in missing_points:
+                                        eval_sections.append(f"\n• {p}")
                                 
-                                # Show practice evaluation (not stored)
-                                evaluation_text = f"""## 📊 Practice Evaluation {emoji}
-
-### Practice Score: **{score}/5** {f"({rating})" if rating else ""}
-
-*This is practice - your official score from the first attempt is already recorded.*
-
-### ✅ Strong Points
-{strong_text}
-
-### ❌ Still Missing
-{missing_text}
-
-### ⚠️ Areas to Develop
-{weak_text}
-
-### 💡 Senior PM Perspective
-{senior_perspective}
-
----
-🎯 **Great practice!** Using frameworks helps structure your thinking. Ready for the next question?"""
+                                if weak_areas:
+                                    eval_sections.append("\n\n### ⚠️ Areas to Develop")
+                                    for a in weak_areas:
+                                        eval_sections.append(f"\n• {a}")
+                                
+                                if senior_perspective:
+                                    eval_sections.append(f"\n\n### 💡 Senior PM Perspective\n{senior_perspective}")
+                                
+                                eval_sections.append("\n\n---\n🎯 **Great practice!** Ready for the next question?")
+                                
+                                evaluation_text = "".join(eval_sections)
                                 
                                 st.session_state.messages_by_topic[topic_key].append({
                                     "role": "assistant",
                                     "content": evaluation_text
                                 })
                                 
-                                # Reset retry mode and show next question button
                                 st.session_state.retry_mode = False
                                 st.session_state.retry_question_id = None
                                 st.session_state.awaiting_answer = False
                                 st.session_state.show_retry_buttons = True
-                                st.session_state.last_score = 99  # Special value to hide "Try Again" button
+                                st.session_state.last_score = 99  # Hide "Try Again" button
                                 st.rerun()
                 
                 else:
-                    # NORMAL MODE: Show Skip and Submit
+                    # NORMAL MODE
                     col_skip, col_submit = st.columns([1, 2])
                     
                     with col_skip:
                         if st.button("⏭️ Skip", use_container_width=True, key="skip_btn"):
                             skipped_question_num = st.session_state.topic_attempted[topic_key]
                             
-                            skipped_q_text = ""
-                            if messages and messages[-1]["role"] == "assistant":
-                                full_text = messages[-1]["content"]
-                                if ":" in full_text:
-                                    parts = full_text.split(":", 1)
-                                    if len(parts) > 1:
-                                        skipped_q_text = parts[1].strip().replace("**", "").replace("*Take your time and provide a thoughtful answer.*", "").strip()
+                            # Use stored question text instead of parsing
+                            skipped_q_text = st.session_state.current_question_text or ""
                             
                             st.session_state.topic_skipped_questions[topic_key].append({
                                 "question_id": st.session_state.current_question_id,
@@ -537,6 +557,7 @@ else:
                             st.session_state.show_retry_buttons = False
                             st.session_state.current_question_id = None
                             st.session_state.current_question_number = None
+                            st.session_state.current_question_text = None
                             st.session_state.awaiting_answer = False
                             st.session_state.retry_mode = False
                             st.session_state.topic_skipped[topic_key] += 1
@@ -551,14 +572,8 @@ else:
                         if st.button("📤 Submit Answer", use_container_width=True, key="submit_btn", disabled=submit_disabled, type="primary"):
                             st.session_state.messages_by_topic[topic_key].append({"role": "user", "content": user_input})
                             
-                            question_text = ""
-                            if messages and messages[-1]["role"] == "assistant":
-                                full_text = messages[-1]["content"]
-                                if ":" in full_text:
-                                    parts = full_text.split(":", 1)
-                                    if len(parts) > 1:
-                                        question_text = parts[1].strip().replace("**", "").replace("*Take your time and provide a thoughtful answer.*", "").strip()
-                            
+                            # Use stored question text
+                            question_text = st.session_state.current_question_text or ""
                             current_q_num = st.session_state.current_question_number or st.session_state.topic_attempted[topic_key]
                             
                             with st.spinner("Evaluating your answer..."):
@@ -575,40 +590,44 @@ else:
                                 framework = eval_result.get("framework", {})
                                 senior_perspective = eval_result.get("senior_pm_answer", "")
                                 
-                                strong_text = "\n".join([f"• {p}" for p in strong_points]) if strong_points else "• Good effort"
-                                missing_text = "\n".join([f"• {p}" for p in missing_points]) if missing_points else "• Consider more perspectives"
-                                weak_text = "\n".join([f"• {a}" for a in weak_areas]) if weak_areas else "• Keep practicing"
+                                emoji, _ = get_score_color(score)
                                 
+                                # Build evaluation text dynamically - NO fake fallbacks
+                                eval_sections = [f"## 📊 Evaluation {emoji}"]
+                                eval_sections.append(f"\n### Score: **{score}/5** {f'({rating})' if rating else ''}")
+                                
+                                # Only show Strong Points if there are actual strengths
+                                if strong_points:
+                                    eval_sections.append("\n\n### ✅ Strong Points")
+                                    for p in strong_points:
+                                        eval_sections.append(f"\n• {p}")
+                                
+                                # Always show Missing Points
+                                if missing_points:
+                                    eval_sections.append("\n\n### ❌ Missing Points")
+                                    for p in missing_points:
+                                        eval_sections.append(f"\n• {p}")
+                                
+                                # Always show Weak Areas
+                                if weak_areas:
+                                    eval_sections.append("\n\n### ⚠️ Areas to Develop")
+                                    for a in weak_areas:
+                                        eval_sections.append(f"\n• {a}")
+                                
+                                # Framework
                                 if isinstance(framework, dict) and framework:
                                     fw_name = framework.get("name", "Framework")
                                     fw_steps = framework.get("steps", [])
-                                    fw_text = f"**{fw_name}**\n\n" + "\n".join([f"{i+1}. {s}" for i, s in enumerate(fw_steps)]) if fw_steps else f"**{fw_name}**"
-                                else:
-                                    fw_text = "Continue developing your PM framework"
+                                    eval_sections.append(f"\n\n### 🎯 Framework to Remember\n**{fw_name}**")
+                                    if fw_steps:
+                                        for i, s in enumerate(fw_steps, 1):
+                                            eval_sections.append(f"\n{i}. {s}")
                                 
-                                if not senior_perspective:
-                                    senior_perspective = "A senior PM would consider business impact, technical feasibility, and user needs."
+                                # Senior PM
+                                if senior_perspective:
+                                    eval_sections.append(f"\n\n### 💡 Senior PM Perspective\n{senior_perspective}")
                                 
-                                emoji, _ = get_score_color(score)
-                                
-                                evaluation_text = f"""## 📊 Evaluation {emoji}
-
-### Score: **{score}/5** {f"({rating})" if rating else ""}
-
-### ✅ Strong Points
-{strong_text}
-
-### ❌ Missing Points
-{missing_text}
-
-### ⚠️ Areas to Develop
-{weak_text}
-
-### 🎯 Framework to Remember
-{fw_text}
-
-### 💡 Senior PM Perspective
-{senior_perspective}"""
+                                evaluation_text = "".join(eval_sections)
                                 
                                 st.session_state.messages_by_topic[topic_key].append({
                                     "role": "assistant",
@@ -616,16 +635,23 @@ else:
                                 })
                                 
                                 st.session_state.last_score = score
+                                
+                                # Build framework text for retry
+                                if isinstance(framework, dict) and framework:
+                                    fw_name = framework.get("name", "Framework")
+                                    fw_steps = framework.get("steps", [])
+                                    fw_text = f"**{fw_name}**\n\n" + "\n".join([f"{i+1}. {s}" for i, s in enumerate(fw_steps)]) if fw_steps else f"**{fw_name}**"
+                                else:
+                                    fw_text = "Review the feedback above"
                                 st.session_state.last_framework = fw_text
                                 
-                                # Store the question ID for potential retry
                                 st.session_state.retry_question_id = st.session_state.current_question_id
                                 
-                                # Store answer (only for first attempt)
+                                # Store answer with ACTUAL question text
                                 st.session_state.topic_answers[topic_key].append({
                                     "question_id": st.session_state.current_question_id,
                                     "question_number": current_q_num,
-                                    "question_text": question_text,
+                                    "question_text": question_text,  # Now properly stored
                                     "answer": user_input,
                                     "score": score,
                                     "rating": rating,
@@ -636,7 +662,7 @@ else:
                                     "senior_pm_answer": senior_perspective
                                 })
                                 
-                                # If answering a skipped question, remove from skipped list
+                                # Remove from skipped if applicable
                                 if st.session_state.current_question_number:
                                     skipped_list = st.session_state.topic_skipped_questions[topic_key]
                                     for i, sq in enumerate(skipped_list):
@@ -647,17 +673,17 @@ else:
                                 
                                 st.session_state.current_question_id = None
                                 st.session_state.current_question_number = None
+                                st.session_state.current_question_text = None
                                 st.session_state.awaiting_answer = False
                                 st.session_state.show_retry_buttons = True
                                 st.rerun()
         
-        # Retry/Next buttons (after evaluation)
+        # Retry/Next buttons
         if st.session_state.show_retry_buttons and st.session_state.last_score is not None:
             st.markdown("---")
             col1, col2 = st.columns(2)
             
             with col1:
-                # Only show "Try Again" if score < 4 and not after a practice attempt
                 if st.session_state.last_score < 4:
                     if st.button("🔄 Practice With Framework", use_container_width=True):
                         st.session_state.messages_by_topic[topic_key].append({
@@ -670,7 +696,7 @@ Here's the framework to guide your answer:
 
 **Try answering again using this framework.**
 
-*This is practice only - your official score ({st.session_state.last_score}/5) is already recorded and won't change.*"""
+*This is practice only - your official score ({st.session_state.last_score}/5) is already recorded.*"""
                         })
                         st.session_state.retry_mode = True
                         st.session_state.awaiting_answer = True
@@ -684,6 +710,7 @@ Here's the framework to guide your answer:
                     st.session_state.last_framework = None
                     st.session_state.current_question_id = None
                     st.session_state.current_question_number = None
+                    st.session_state.current_question_text = None
                     st.session_state.awaiting_answer = False
                     st.session_state.retry_mode = False
                     st.session_state.retry_question_id = None
@@ -701,6 +728,7 @@ Here's the framework to guide your answer:
                             
                             st.session_state.current_question_id = question_id
                             st.session_state.current_question_number = next_question_num
+                            st.session_state.current_question_text = question_text  # Store question
                             st.session_state.awaiting_answer = True
                             
                             st.session_state.messages_by_topic[topic_key] = [{
@@ -711,7 +739,7 @@ Here's the framework to guide your answer:
                     st.rerun()
         
         else:
-            # Auto-load next question (only if not in retry mode)
+            # Auto-load next question
             if answered < QUESTIONS_PER_TOPIC and st.session_state.current_question_id is None and not st.session_state.retry_mode:
                 with st.spinner("Loading question..."):
                     result = get_pm_question({"level": "intermediate", "topic": topic_key})
@@ -723,6 +751,7 @@ Here's the framework to guide your answer:
                     
                     st.session_state.current_question_id = question_id
                     st.session_state.current_question_number = current_question_num
+                    st.session_state.current_question_text = question_text  # Store question text
                     st.session_state.awaiting_answer = True
                     
                     st.session_state.messages_by_topic[topic_key].append({
