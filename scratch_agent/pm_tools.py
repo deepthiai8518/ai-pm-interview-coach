@@ -30,7 +30,13 @@ def get_pm_question(params: dict):
         "evaluation": "AI Evaluation & Metrics - Model performance, user satisfaction, A/B testing, success metrics",
         "design_patterns": "AI Design Patterns - Prompt engineering, chain-of-thought, reflection loops, human-in-the-loop",
         "data_privacy": "Data Governance & Privacy - Compliance, PII handling, data pipelines, security",
-        "product_execution": "Product Execution - Roadmapping, stakeholder management, tradeoffs, MVP scoping"
+        "product_execution": "Product Execution - Roadmapping, stakeholder management, tradeoffs, MVP scoping",
+        "agents": "AI Agents & Orchestration - Multi-agent systems, tool use, agent design patterns",
+        "ml_ops": "ML Ops & Infrastructure - Model deployment, monitoring, scaling, CI/CD for ML",
+        "user_experience": "User Experience & UX - AI product design, user interaction patterns, trust building",
+        "pricing": "Pricing & Monetization - AI business models, pricing strategies, cost optimization",
+        "safety": "AI Safety & Ethics - Responsible AI, bias, fairness, alignment, guardrails",
+        "competitive": "Competitive Analysis - Market positioning, competitor analysis, differentiation"
     }
     
     topic_name = topic_map.get(topic, topic)
@@ -84,7 +90,7 @@ Return ONLY valid JSON:
         question_data["level"] = level
         question_data["topic"] = topic
         
-        # Store question with INTEGER key (consistent with question_id)
+        # Store question
         conversation_store[question_id] = {
             "question": question_data,
             "user_answer": None,
@@ -114,6 +120,7 @@ Return ONLY valid JSON:
         }
         return fallback
 
+
 def evaluate_pm_answer(params: dict):
     """
     Evaluate user's answer with detailed feedback and framework.
@@ -122,7 +129,6 @@ def evaluate_pm_answer(params: dict):
     if not client:
         return {"error": "OpenAI client not initialized"}
     
-    # Convert to int for consistent key lookup
     question_id = int(params["id"])
     user_answer = params["answer"]
     
@@ -131,8 +137,9 @@ def evaluate_pm_answer(params: dict):
     
     question_data = conversation_store[question_id]["question"]
     
-    # Comprehensive evaluation prompt
-    eval_prompt = f"""You are a STRICT evaluator for AI Product Manager interview answers. You are calibrated to real interview standards where incomplete or vague answers do not pass.
+    # Quality-based evaluation prompt (NOT word count based)
+    eval_prompt = f"""You are a STRICT and HONEST evaluator for AI Product Manager interview answers.
+Your job is to give accurate, helpful feedback based on QUALITY, not length.
 
 **Question Asked:**
 {question_data['question']}
@@ -145,69 +152,119 @@ def evaluate_pm_answer(params: dict):
 
 ---
 
-**STRICT SCORING RULES (APPLY THESE FIRST):**
+**SCORING RUBRIC (Based on QUALITY, not word count):**
 
-Before evaluating content quality, check these automatic caps:
+**Score 1 (Poor) - Answer fails to address the question:**
+- "I don't know" or equivalent non-answers
+- Completely off-topic or irrelevant response
+- Shows fundamental misunderstanding of the concept
+- Just restates the question without answering
+- Random or incoherent response
 
-1. **INCOMPLETE ANSWERS = Score 1-2**
-   - Answer cuts off mid-sentence or mid-thought
-   - Answer is under 50 words
-   - Answer only restates the question or says what they "would" do without doing it
+**Score 2 (Below Average) - Answer attempts but fails:**
+- Addresses the topic but not the specific question
+- Extremely vague with no actionable content
+- Mentions buzzwords without demonstrating understanding
+- Incomplete thought that doesn't reach a conclusion
+- Surface-level response with no depth
 
-2. **PARTIAL ANSWERS = Cap at 2**
-   - Multi-part question but only addresses one part
-   - Ignores key aspects (e.g., asked about tradeoffs but doesn't mention any)
+**Score 3 (Average) - Answer is acceptable but basic:**
+- Answers the question but only covers obvious points
+- Lacks specific examples, metrics, or concrete approaches
+- Missing 1-2 key aspects from evaluation criteria
+- Shows understanding but no differentiated thinking
+- Would pass but not impress in an interview
 
-3. **VAGUE ANSWERS = Cap at 3**
-   - No specific metrics, examples, or concrete approaches
-   - Generic statements that could apply to any problem
-   - Uses buzzwords without demonstrating understanding
+**Score 4 (Good) - Answer demonstrates solid PM thinking:**
+- Directly addresses all parts of the question
+- Includes specific metrics, examples, or approaches
+- Shows clear reasoning and structured thinking
+- Considers tradeoffs or multiple perspectives
+- Would perform well in a real interview
 
-**SCORING RUBRIC:**
+**Score 5 (Excellent) - Answer demonstrates senior-level mastery:**
+- Comprehensive and well-structured response
+- Demonstrates deep understanding with nuanced insights
+- Includes concrete examples AND explains reasoning
+- Proactively addresses edge cases or risks
+- Shows business acumen alongside technical knowledge
+- Would stand out in a competitive interview
 
-- **1 = Poor:** Incomplete, fragment, off-topic, or demonstrates misunderstanding
-- **2 = Below Average:** Partially addresses question but missing major components, superficial, or cuts off
-- **3 = Average:** Complete answer covering basics, but lacks depth, specifics, or misses some criteria
-- **4 = Good:** Solid, complete answer with specific examples/metrics, addresses all parts, shows clear reasoning
-- **5 = Excellent:** Comprehensive, structured, demonstrates senior PM thinking with tradeoffs, priorities, and actionable insights
+---
+
+**CRITICAL RULES FOR FEEDBACK:**
+
+1. **DO NOT use word count as a scoring factor** - A concise 50-word answer with clear structure and specifics beats a rambling 200-word answer
+
+2. **Score based on these qualities:**
+   - RELEVANCE: Does it answer what was asked?
+   - STRUCTURE: Is there a clear framework or approach?
+   - SPECIFICITY: Are there concrete metrics, examples, or methods?
+   - DEPTH: Does it show real understanding?
+   - PM THINKING: Does it consider business, users, and technical aspects?
+
+3. **For Score 1-2 answers:**
+   - strong_points should be EMPTY [] unless there's a genuinely good element
+   - DO NOT give fake praise like "Good effort" or "Attempted to answer"
+   - Be honest about what's missing
+
+4. **For all answers:**
+   - missing_points should be SPECIFIC and ACTIONABLE
+   - weak_areas should explain the actual problems
+   - framework should be relevant and memorable
+   - senior_pm_answer should model excellence
+
+---
 
 **CALIBRATION EXAMPLES:**
 
-- "I would look at the metrics and make a decision" = Score 1 (vague, no substance)
-- "I'd analyze engagement and satisfaction separately to find the root cause—" = Score 2 (cuts off, incomplete)
-- "I'd segment users by behavior type to see if certain groups drive the satisfaction drop, then decide based on which segment matters more for our business goals" = Score 3 (decent but lacks specific metrics or framework)
-- "I'd first decompose engagement by action type (clicks vs. time spent vs. purchases) and satisfaction by user segment. If power users show satisfaction drops, that's a red flag. I'd run qualitative interviews, check if recommendations feel pushy, and set a threshold: if satisfaction doesn't recover within 2 sprints of iteration, pivot to a different approach" = Score 4 (specific, complete, actionable)
+Example 1 - Score 1:
+Q: "How would you measure success for a recommendation system?"
+A: "I would look at the metrics"
+Why: No specific metrics mentioned, no approach, doesn't demonstrate any PM knowledge
 
-**YOUR TASK:**
-1. First, check if any automatic caps apply
-2. Then evaluate content quality within that cap
-3. Be tough but fair—this is interview calibration, not encouragement
+Example 2 - Score 2:
+Q: "How would you measure success for a recommendation system?"
+A: "I would track engagement and see if users like the recommendations by looking at click rates and maybe doing some surveys"
+Why: Mentions relevant concepts (engagement, clicks, surveys) but extremely vague, no specific metrics or methodology
+
+Example 3 - Score 3:
+Q: "How would you measure success for a recommendation system?"
+A: "I'd measure CTR on recommendations, track conversion rates, and monitor user retention. I'd also look at recommendation diversity to avoid filter bubbles."
+Why: Good metrics mentioned, shows understanding, but lacks specificity on targets, methodology, or tradeoffs
+
+Example 4 - Score 4:
+Q: "How would you measure success for a recommendation system?"
+A: "I'd establish a metrics hierarchy: 1) Business metrics like revenue per user and conversion rate, 2) Engagement metrics like CTR (target >5%) and time-to-first-click, 3) Quality metrics like recommendation diversity and coverage. I'd run A/B tests comparing against baseline, with guardrail metrics for user satisfaction to catch negative side effects."
+Why: Structured approach, specific targets, considers multiple dimensions, mentions methodology (A/B tests) and tradeoffs (guardrails)
+
+Example 5 - Score 5:
+Q: "How would you measure success for a recommendation system?"
+A: "I'd build a measurement framework across three layers: Business Impact (revenue lift, LTV changes, margin impact), User Value (task completion rate, return visits, NPS delta), and System Health (latency p95, coverage, cold-start performance). For methodology, I'd use interleaved experiments for faster iteration and A/B tests for final validation. Key tradeoff: optimizing for clicks vs. long-term satisfaction—I'd add guardrails for diversity and serendipity to prevent filter bubbles. For cold-start users, I'd separately track onboarding conversion. Success criteria: 10% revenue lift with no NPS degradation."
+Why: Comprehensive framework, specific metrics with targets, clear methodology, proactively addresses tradeoffs and edge cases, shows senior-level systems thinking
+
+---
 
 Return ONLY valid JSON:
 {{
     "score": <1-5>,
     "rating_label": "<Poor|Below Average|Average|Good|Excellent>",
-    "strong_points": ["Specific strength 1", "Specific strength 2"],
-    "missing_points": ["What they should have included 1", "What they missed 2"],
-    "weak_areas": ["Where reasoning was weak 1", "Area to improve 2"],
+    "strong_points": ["Specific strength from their answer"] OR [] if none exist,
+    "missing_points": ["Specific thing they should have included 1", "Specific thing 2"],
+    "weak_areas": ["Specific problem with their answer 1", "Specific problem 2"],
     "framework": {{
-        "name": "FRAMEWORK NAME",
+        "name": "MEMORABLE FRAMEWORK NAME",
         "acronym": "What each letter stands for",
-        "steps": [
-            "Step 1: ...",
-            "Step 2: ...",
-            "Step 3: ..."
-        ],
-        "application": "How to use this in interviews"
+        "steps": ["Step 1: specific action", "Step 2: specific action", "Step 3: specific action"]
     }},
-    "senior_pm_answer": "A senior PM would..."
+    "senior_pm_answer": "A 3-4 sentence model answer showing how a senior PM would respond with specifics."
 }}"""
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o",  # Use GPT-4 for better evaluation
+            model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are an expert AI Product Manager interviewer providing detailed, constructive, and actionable feedback. Create memorable frameworks that candidates can use in future interviews."},
+                {"role": "system", "content": "You are an expert AI PM interviewer. Evaluate based on QUALITY and SUBSTANCE, not length. Be HONEST - never give false praise for poor answers. Your feedback should help candidates genuinely improve."},
                 {"role": "user", "content": eval_prompt}
             ],
             temperature=0.3,
@@ -226,6 +283,23 @@ Return ONLY valid JSON:
         
         evaluation = json.loads(content)
         
+        # GUARDRAIL: If score is 1-2, filter out fake praise from strong_points
+        score = evaluation.get("score", 3)
+        if score <= 2:
+            strong_points = evaluation.get("strong_points", [])
+            fake_praise_phrases = [
+                "good effort", "attempted", "tried", "willingness", "engaged",
+                "showed interest", "at least", "effort to", "brave", "honest",
+                "courage", "acknowledge", "admitted", "recognize"
+            ]
+            filtered_strengths = []
+            for point in strong_points:
+                point_lower = point.lower()
+                is_fake = any(phrase in point_lower for phrase in fake_praise_phrases)
+                if not is_fake:
+                    filtered_strengths.append(point)
+            evaluation["strong_points"] = filtered_strengths
+        
         # Store evaluation
         conversation_store[question_id]["user_answer"] = user_answer
         conversation_store[question_id]["evaluation"] = evaluation
@@ -235,22 +309,20 @@ Return ONLY valid JSON:
     except Exception as e:
         return {
             "error": f"Evaluation failed: {str(e)}",
-            "score": 3,
-            "rating_label": "Average",
-            "strong_points": ["You provided a thoughtful response"],
-            "missing_points": ["More specific details needed"],
-            "weak_areas": ["Consider multiple perspectives"],
+            "score": 1,
+            "rating_label": "Poor",
+            "strong_points": [],
+            "missing_points": ["Unable to evaluate - please try again"],
+            "weak_areas": ["Evaluation error occurred"],
             "framework": {
-                "name": "BASIC Framework",
-                "acronym": "Business-Architecture-Safety-Impact-Costs",
+                "name": "STAR Framework",
+                "acronym": "Situation-Task-Action-Result",
                 "steps": [
-                    "Business: What's the business goal?",
-                    "Architecture: What technical approach?",
-                    "Safety: What could go wrong?",
-                    "Impact: How to measure success?",
-                    "Costs: What are the tradeoffs?"
-                ],
-                "application": "Use this to structure any AI PM answer"
+                    "Situation: Describe the context",
+                    "Task: What was required",
+                    "Action: What you did/would do",
+                    "Result: Expected outcomes and metrics"
+                ]
             },
-            "senior_pm_answer": "Consider the full context including business impact, technical feasibility, and user needs."
+            "senior_pm_answer": "A senior PM would structure their answer with clear context, specific actions, and measurable outcomes."
         }
