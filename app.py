@@ -157,6 +157,9 @@ if st.sidebar.button("🏠 Home", use_container_width=True):
     st.session_state.reviewing_answer_idx = None
     st.rerun()
 
+st.sidebar.markdown("---")
+st.sidebar.caption("Developed by **Deepthi**")
+
 # MAIN CONTENT
 if st.session_state.current_topic is None:
     # Home page
