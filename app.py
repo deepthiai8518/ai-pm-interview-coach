@@ -327,6 +327,13 @@ else:
                     for area in weak_areas:
                         st.write(f"• {area}")
                 
+                # How to Answer - step by step guidance
+                how_to_answer = ans.get("how_to_answer", [])
+                if how_to_answer:
+                    st.markdown("**📝 How to Answer This Question:**")
+                    for i, step in enumerate(how_to_answer, 1):
+                        st.write(f"{i}. {step}")
+                
                 # Framework
                 framework = ans.get("framework", {})
                 if framework and isinstance(framework, dict):
@@ -576,6 +583,7 @@ else:
                                 strong_points = eval_result.get("strong_points", [])
                                 missing_points = eval_result.get("missing_points", [])
                                 weak_areas = eval_result.get("weak_areas", [])
+                                how_to_answer = eval_result.get("how_to_answer", [])
                                 framework = eval_result.get("framework", {})
                                 senior_perspective = eval_result.get("senior_pm_answer", "")
                                 
@@ -602,6 +610,12 @@ else:
                                     eval_sections.append("\n\n### ⚠️ Areas to Develop")
                                     for a in weak_areas:
                                         eval_sections.append(f"\n• {a}")
+                                
+                                # How to Answer - step by step guidance
+                                if how_to_answer:
+                                    eval_sections.append("\n\n### 📝 How to Answer This Question")
+                                    for i, step in enumerate(how_to_answer, 1):
+                                        eval_sections.append(f"\n{i}. {step}")
                                 
                                 # Framework
                                 if isinstance(framework, dict) and framework:
@@ -647,6 +661,7 @@ else:
                                     "strong_points": strong_points,
                                     "missing_points": missing_points,
                                     "weak_areas": weak_areas,
+                                    "how_to_answer": how_to_answer,
                                     "framework": framework,
                                     "senior_pm_answer": senior_perspective
                                 })
