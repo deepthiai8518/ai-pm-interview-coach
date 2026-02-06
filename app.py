@@ -458,15 +458,18 @@ else:
                             st.session_state.last_score = None
                             st.session_state.last_framework = None
                             
-                            current_attempted = st.session_state.topic_attempted[topic_key]
-                            if current_attempted < QUESTIONS_PER_TOPIC:
+                            # Calculate next question number
+                            current_answered = len(st.session_state.topic_answers[topic_key])
+                            current_skipped = st.session_state.topic_skipped[topic_key]
+                            
+                            if current_answered + current_skipped < QUESTIONS_PER_TOPIC:
                                 with st.spinner("Loading next question..."):
                                     result = get_pm_question({"level": "intermediate", "topic": topic_key})
                                     question_text = result.get("question", "Error")
                                     question_id = result.get("id")
                                     
-                                    st.session_state.topic_attempted[topic_key] += 1
-                                    next_question_num = st.session_state.topic_attempted[topic_key]
+                                    # Question number = answered + skipped + 1
+                                    next_question_num = current_answered + current_skipped + 1
                                     
                                     st.session_state.current_question_id = question_id
                                     st.session_state.current_question_number = next_question_num
@@ -542,7 +545,8 @@ else:
                     
                     with col_skip:
                         if st.button("⏭️ Skip", use_container_width=True, key="skip_btn"):
-                            skipped_question_num = st.session_state.topic_attempted[topic_key]
+                            # Use the current question number that was set when question was loaded
+                            skipped_question_num = st.session_state.current_question_number
                             
                             # Use stored question text instead of parsing
                             skipped_q_text = st.session_state.current_question_text or ""
@@ -731,20 +735,22 @@ Here's the framework to guide your answer:
                     st.session_state.retry_mode = False
                     st.session_state.retry_question_id = None
                     
-                    current_attempted = st.session_state.topic_attempted[topic_key]
+                    # Calculate how many more questions needed
+                    current_answered = len(st.session_state.topic_answers[topic_key])
+                    current_skipped = st.session_state.topic_skipped[topic_key]
                     
-                    if current_attempted < QUESTIONS_PER_TOPIC:
+                    if current_answered + current_skipped < QUESTIONS_PER_TOPIC:
                         with st.spinner("Generating next question..."):
                             result = get_pm_question({"level": "intermediate", "topic": topic_key})
                             question_text = result.get("question", "Error")
                             question_id = result.get("id")
                             
-                            st.session_state.topic_attempted[topic_key] += 1
-                            next_question_num = st.session_state.topic_attempted[topic_key]
+                            # Question number = answered + skipped + 1
+                            next_question_num = current_answered + current_skipped + 1
                             
                             st.session_state.current_question_id = question_id
                             st.session_state.current_question_number = next_question_num
-                            st.session_state.current_question_text = question_text  # Store question
+                            st.session_state.current_question_text = question_text
                             st.session_state.awaiting_answer = True
                             
                             st.session_state.messages_by_topic[topic_key] = [{
@@ -762,8 +768,8 @@ Here's the framework to guide your answer:
                     question_text = result.get("question", "Error")
                     question_id = result.get("id")
                     
-                    st.session_state.topic_attempted[topic_key] += 1
-                    current_question_num = st.session_state.topic_attempted[topic_key]
+                    # Question number = answered + skipped + 1 (next in sequence)
+                    current_question_num = answered + st.session_state.topic_skipped[topic_key] + 1
                     
                     st.session_state.current_question_id = question_id
                     st.session_state.current_question_number = current_question_num
