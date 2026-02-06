@@ -252,6 +252,7 @@ Return ONLY valid JSON:
     "strong_points": ["Specific strength from their answer"] OR [] if none exist,
     "missing_points": ["Specific thing they should have included 1", "Specific thing 2"],
     "weak_areas": ["Specific problem with their answer 1", "Specific problem 2"],
+    "how_to_answer": ["Step 1: Start by... (specific action)", "Step 2: Then explain... (specific action)", "Step 3: Address... (specific action)", "Step 4: Conclude with... (specific action)"],
     "framework": {{
         "name": "MEMORABLE FRAMEWORK NAME",
         "acronym": "What each letter stands for",
